@@ -13,6 +13,7 @@ import etf.iot.cloud.platform.services.enums.DataUnit;
 import etf.iot.cloud.platform.services.model.DataEntity;
 import etf.iot.cloud.platform.services.model.DeviceEntity;
 import etf.iot.cloud.platform.services.services.DataService;
+import etf.iot.cloud.platform.services.services.DeviceService;
 import etf.iot.cloud.platform.services.util.LoggerBean;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -63,8 +64,14 @@ public class DataServiceImpl implements DataService {
      * JSON parser
      */
     private final Gson gson = new Gson();
+
     @Value("${history}")
     private String historyInHrs;
+
+    /**
+     * Provides logic for grabbing device with specific username (used within receiveMqtt)
+     */
+    private final DeviceService deviceService;
 
     /**
      * Date format
@@ -81,13 +88,14 @@ public class DataServiceImpl implements DataService {
      * @param deviceDao device's account dao
      * @param simpMessageTemplate message forwarder
      */
-    public DataServiceImpl(DataDao dataDao, StatsDao statsDao, ModelMapper modelMapper, LoggerBean loggerBean, DeviceDao deviceDao, SimpMessagingTemplate simpMessageTemplate) {
+    public DataServiceImpl(DataDao dataDao, StatsDao statsDao, ModelMapper modelMapper, LoggerBean loggerBean, DeviceDao deviceDao, SimpMessagingTemplate simpMessageTemplate, DeviceService deviceService) {
         this.dataDao = dataDao;
         this.statsDao = statsDao;
         this.modelMapper = modelMapper;
         this.loggerBean = loggerBean;
         this.deviceDao = deviceDao;
         this.simpMessageTemplate = simpMessageTemplate;
+        this.deviceService = deviceService;
     }
 
     /**
@@ -111,6 +119,44 @@ public class DataServiceImpl implements DataService {
         SecurityContext context = SecurityContextHolder.getContext();
         Authentication authentication = context.getAuthentication();
         Device device = (Device) authentication.getPrincipal();
+        try {
+            DateFormat dateFormat = new SimpleDateFormat(device.getTimeFormat());
+            entity.setTime(dateFormat.parse(time));
+            data.setTime(dateFormater.format(dateFormat.parse(time)));
+        } catch (Exception e) {
+            e.printStackTrace();
+            loggerBean.logError(e);
+            entity.setTime(new Date());
+            data.setTime(dateFormater.format(new Date()));
+        }
+        DeviceEntity deviceEntity = deviceDao.findById(device.getId()).get();
+        entity.setDevice(deviceEntity);
+        dataDao.saveAndFlush(entity);
+        simpMessageTemplate.convertAndSendToUser(device.getUsername(), entity.getType().name().toLowerCase(), gson.toJson(data,Data.class));
+    }
+
+    /**
+     * Processes and stores received sensor data via mqtt
+     *
+     * @param username Username of gateway device that sent sensor data via mqtt
+     * @param data sensor data object
+     */
+    public void receiveMqtt(String username, Data data) {
+        String time = data.getTime();
+        data.setTime(null);
+        DataEntity entity = modelMapper.map(data, DataEntity.class);
+        DataUnit unit = DataUnit.Unknown;
+        try {
+            unit = DataUnit.valueOf(data.getUnit());
+        } catch (Exception e) {
+            e.printStackTrace();
+            loggerBean.logError(e);
+        }
+        entity.setUnit(unit);
+        entity.setType(DataType.valueOf(data.getType()));
+
+        Device device = deviceService.loadUserByUsername(username);
+
         try {
             DateFormat dateFormat = new SimpleDateFormat(device.getTimeFormat());
             entity.setTime(dateFormat.parse(time));

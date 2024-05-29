@@ -1,0 +1,3 @@
+Manifest-Version: 1.0
+Main-Class: etf.iot.cloud.platform.services.IotCloudPlatformApplication
+

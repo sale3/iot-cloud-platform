@@ -5,6 +5,7 @@ import etf.iot.cloud.platform.services.dao.StatsDao;
 import etf.iot.cloud.platform.services.dto.Device;
 import etf.iot.cloud.platform.services.dto.Stats;
 import etf.iot.cloud.platform.services.model.StatsEntity;
+import etf.iot.cloud.platform.services.services.DeviceService;
 import etf.iot.cloud.platform.services.services.StatsService;
 import etf.iot.cloud.platform.services.util.LoggerBean;
 import org.modelmapper.ModelMapper;
@@ -39,12 +40,17 @@ public class StatsServiceImpl implements StatsService {
      * Provides logging func
      */
     private final LoggerBean loggerBean;
+    /**
+     * Provides logic for grabbing device with specific username (used within receiveMqtt)
+     */
+    private final DeviceService deviceService;
 
-    public StatsServiceImpl(StatsDao statsDao, DeviceDao deviceDao, ModelMapper modelMapper, LoggerBean loggerBean) {
+    public StatsServiceImpl(StatsDao statsDao, DeviceDao deviceDao, ModelMapper modelMapper, LoggerBean loggerBean, DeviceService deviceService) {
         this.statsDao = statsDao;
         this.deviceDao = deviceDao;
         this.modelMapper = modelMapper;
         this.loggerBean = loggerBean;
+        this.deviceService = deviceService;
     }
 
     /**
@@ -63,6 +69,34 @@ public class StatsServiceImpl implements StatsService {
         SecurityContext context = SecurityContextHolder.getContext();
         Authentication authentication = context.getAuthentication();
         Device device = (Device) authentication.getPrincipal();
+
+        try{
+            DateFormat dateFormat = new SimpleDateFormat(device.getTimeFormat());
+            statsEntity.setStartTime(dateFormat.parse(from));
+            statsEntity.setEndTime(dateFormat.parse(to));
+        }catch (Exception e){
+            e.printStackTrace();
+            loggerBean.logError(e);
+        }
+        statsEntity.setDevice(deviceDao.findDeviceByUsername(device.getUsername()));
+        statsDao.saveAndFlush(statsEntity);
+    }
+
+    /**
+     * Processes and stores received iot gateway stats data via mqtt
+     *
+     * @param username iot gateway
+     * @param stats iot gateway stats data
+     */
+    public void receiveMqtt(String username, Stats stats) {
+        System.out.println(stats);
+        String from=stats.getStartTime();
+        String to=stats.getEndTime();
+        stats.setStartTime(null);
+        stats.setEndTime(null);
+        StatsEntity statsEntity=modelMapper.map(stats,StatsEntity.class);
+
+        Device device = deviceService.loadUserByUsername(username);
 
         try{
             DateFormat dateFormat = new SimpleDateFormat(device.getTimeFormat());
