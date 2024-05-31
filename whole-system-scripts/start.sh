@@ -6,7 +6,14 @@
 # By default, this script runs the whole system. Idea behind it is to allow easy way to run all pieces on the same
 # machine, which is useful for development. Parts of the script can be commented if only certain portions of the
 # system are to be run. Since it assumes that everything is run on the same machine, it is not intended for use
-# outside of development, where system would be distributed.
+# outside of development, where system would be distributed. In that case, every piece of the system would have
+# its own script.
+
+# There are 4 parts to this script:
+#	INFO    - Current part that gives more information about the whole system.
+# 	INSTALL - Information about things that need to be installed.
+#	SETUP   - Everything that needs to be set up before system (at its current form) is run.
+#	RUN     - Runs all pieces of the system.
 
 # This script assumes specific directory/file structure when it is executed. It looks like this:
 #	start.sh
@@ -21,6 +28,7 @@
 #			mqtt-conf
 #				gateway-cloud-broker.conf
 #				gateway-periferals-broker.conf
+#				users
 
 # Notes on these files and directories:
 #	app.jar - This file is a renamed SNAPSHOT jar file that is produced when building iot-cloud-platform with Maven
@@ -34,15 +42,15 @@
 #			      Additionally, when script is run it should contain 'node-modules' folder.
 #                             For this, run 'npm install' and 'npm install react-scripts' in folder where package.json
 #			      is located.
+#
+#	mqtt-conf - Contains configuration for two mqtt brokers.
+#
 #	gateway-cloud-broker.conf - Configuration for broker located between gateway and cloud.
+#
 #	gateway-periferals-broker.conf - Configuration for broker located between gateway and sensors/periferals.
-
-# There are 4 parts to this script:
-#	INFO    - This part that gives more information about the whole system.
-# 	INSTALL - Information about things that need to be installed.
-#	SETUP   - Everything that needs to be set up before system (at its current form) is run.
-#	RUN     - Runs all pieces of the system.
-
+#
+#	users - Contains access information for mqtt broker. Currently, for testing, it uses (iot-device, 10060509) as
+#		username-password pair.
 
 # INSTALL=================================================================================================================
 # Prerequisites are provided in README
@@ -75,27 +83,31 @@
 echo "Setup started"
 
 echo "    Closing mosquitto background service"
-# Stop automatic mosquitto service
-# This script line also acts as sudo forcing point
+
+# Stop automatic mosquitto service (mosquitto is automatically run a service on linux).
+# This script line also acts as sudo forcing point.
 sudo systemctl stop mosquitto
 
 echo "    Setting up environment variables"
-# Setup env vars for cloud to use in order to connect to database
+# Setup env vars for cloud to use in order to connect to the database.
 export POSTGRESQL_URL=jdbc:postgresql://localhost:5432/iot-platform-database
 export POSTGRESQL_USER=postgres
 export POSTGRESQL_PASSWORD=mysecretpassword
 export HISTORY=1
-# Setup cloud mqtt client id
+# Setup cloud mqtt client id (some arbitrary name).
 export CLOUD_MQTT_CLIENT_ID=my_test_cloud_client
-# Setup env vars for react app
+# Setup env vars for react app.
 export REACT_APP_API_URL="http://localhost:8080/iot-cloud-platform"
 
 echo "    Setting up mosquitto broker users"
-# Setup users folder for mosquitto broker so that it matches with given mqtt configurations
+# Setup users file for mosquitto broker so that it matches with given mqtt configurations.
 sudo cp app/mqtt-conf/users /etc/mosquitto/users
 
 echo "    Setting up database"
-# Setup 'iot-platform-database'
+# Setup 'iot-platform-database' (this name is assumed by iot-cloud-platform), by creating it and then
+# granting all priviledges to default 'postgres' user.
+# If there are problems with database on particular machine, postgres configuration files are located in
+# /etc/postgresql/<version_number>/main/.
 sudo -u postgres psql -c "CREATE DATABASE \"iot-platform-database\"" > /dev/null 2> /dev/null
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"iot-platform-database\" TO postgres" > /dev/null 2> /dev/null
 
