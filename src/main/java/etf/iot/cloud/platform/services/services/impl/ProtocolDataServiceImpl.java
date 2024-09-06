@@ -1,15 +1,21 @@
 package etf.iot.cloud.platform.services.services.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import etf.iot.cloud.platform.services.dao.ProtocolDao;
 import etf.iot.cloud.platform.services.dao.ProtocolDataDao;
-import etf.iot.cloud.platform.services.dto.OperationResult;
-import etf.iot.cloud.platform.services.dto.ProtocolData;
-import etf.iot.cloud.platform.services.dto.ProtocolDataSubmission;
+import etf.iot.cloud.platform.services.dao.ProtocolInputDao;
+import etf.iot.cloud.platform.services.dto.*;
 import etf.iot.cloud.platform.services.exceptions.EntityNotPresentException;
 import etf.iot.cloud.platform.services.model.ProtocolDataEntity;
 import etf.iot.cloud.platform.services.model.ProtocolEntity;
+import etf.iot.cloud.platform.services.model.ProtocolInputEntity;
+import etf.iot.cloud.platform.services.mqtt.MqttPublisher;
 import etf.iot.cloud.platform.services.services.ProtocolDataService;
+import jakarta.transaction.Transactional;
+import org.eclipse.paho.mqttv5.common.MqttException;
 import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -23,12 +29,21 @@ public class ProtocolDataServiceImpl implements ProtocolDataService {
 
     private final ProtocolDataDao protocolDataDao;
     private final ProtocolDao protocolDao;
+    private final ProtocolInputDao protocolInputDao;
     private final ModelMapper modelMapper;
+    private final ObjectMapper objectMapper;
+    private final MqttPublisher mqttPublisher;
 
-    public ProtocolDataServiceImpl(ProtocolDataDao protocolDataDao, ProtocolDao protocolDao, ModelMapper modelMapper) {
+    @Value("${mqtt.PROTOCOL_TOPIC}")
+    private String PROTOCOL_TOPIC;
+
+    public ProtocolDataServiceImpl(ProtocolDataDao protocolDataDao, ProtocolDao protocolDao, ProtocolInputDao protocolInputDao, ModelMapper modelMapper, ObjectMapper objectMapper, MqttPublisher mqttPublisher) {
         this.protocolDataDao = protocolDataDao;
         this.protocolDao = protocolDao;
+        this.protocolInputDao = protocolInputDao;
         this.modelMapper = modelMapper;
+        this.objectMapper = objectMapper;
+        this.mqttPublisher = mqttPublisher;
     }
 
     @Override
@@ -140,6 +155,75 @@ public class ProtocolDataServiceImpl implements ProtocolDataService {
         }
 
         return new OperationResult(true);
+    }
+
+    @Override
+    public void sendDataToDevice(ProtocolInputSetData protocolInputData) {
+        try {
+            System.out.println(protocolInputData.getDataId());
+            System.out.println("Type = " + protocolInputData.getType());
+            System.out.println("Action = " + protocolInputData.getAction());
+            String jsonPayload = objectMapper.writeValueAsString(protocolInputData);
+            mqttPublisher.publish(PROTOCOL_TOPIC, jsonPayload);
+        } catch (JsonProcessingException | MqttException e) {
+            System.out.println("Exception = " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    @Override
+    public void stopDataFromDevice(ProtocolInputStopData protocolInputData) {
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(protocolInputData);
+            mqttPublisher.publish(PROTOCOL_TOPIC, jsonPayload);
+            protocolInputDao.deleteByDataId(protocolInputData.getDataId());
+        } catch (JsonProcessingException | MqttException e) {
+            System.out.println("Exception = " + e.getMessage());
+        }
+    }
+
+    @Override
+    public void protocolValueDataGatewayRequest(){
+        try {
+            ProtocolValueInputData protocolValueInputData = new ProtocolValueInputData();
+            protocolValueInputData.setType("can_message");
+            protocolValueInputData.setAction("get_current_values");
+            String jsonPayload = objectMapper.writeValueAsString(protocolValueInputData);
+            mqttPublisher.publish(PROTOCOL_TOPIC, jsonPayload);
+            System.out.println("Request sent!!!");
+        } catch (JsonProcessingException | MqttException e) {
+            System.out.println("Exception = " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    @Override
+    public void writeDataToDatabase(List<ProtocolValueData> protocolValueData) {
+        List<Long> dataIds = protocolValueData.stream()
+                .map(ProtocolValueData::getDataId)
+                .collect(Collectors.toList());
+        protocolInputDao.deleteByDataIdIn(dataIds);
+        List<ProtocolInputEntity> protocolInputEntities = protocolValueData.stream().map(this::mapProtocolValueData).toList();
+        protocolInputDao.saveAll(protocolInputEntities);
+    }
+
+    @Override
+    public List<ProtocolValueData> getProtocolValueData() {
+        List<ProtocolInputEntity> protocolInputEntities = protocolInputDao.findAll();
+        return protocolInputEntities.stream().map(this::mapProtocolInputEntity).toList();
+    }
+
+    @Override
+    public ProtocolDataEntity findById(Long id) {
+        return protocolDataDao.findById(id).get();
+    }
+
+    private ProtocolValueData mapProtocolInputEntity(ProtocolInputEntity protocolInputEntity) {
+        return modelMapper.map(protocolInputEntity, ProtocolValueData.class);
+    }
+
+    private ProtocolInputEntity mapProtocolValueData(ProtocolValueData protocolValueData) {
+        return modelMapper.map(protocolValueData, ProtocolInputEntity.class);
     }
 
     private ProtocolData mapProtocolDataEntity(ProtocolDataEntity protocolDataEntity) {

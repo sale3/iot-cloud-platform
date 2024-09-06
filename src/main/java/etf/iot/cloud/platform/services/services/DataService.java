@@ -2,6 +2,7 @@ package etf.iot.cloud.platform.services.services;
 
 import etf.iot.cloud.platform.services.dto.Data;
 import etf.iot.cloud.platform.services.dto.DeviceData;
+import etf.iot.cloud.platform.services.dto.ProtocolStats;
 
 /**
  * Interface for sensor data service
@@ -21,6 +22,8 @@ public interface DataService {
      * @param data sensor data object
      */
     void receiveMqtt(String username, Data data);
+
+    void receiveProtocolMqtt(String username, ProtocolStats data);
 
     /**
      * Returns sensor and stats data produced by specified iot gateway
