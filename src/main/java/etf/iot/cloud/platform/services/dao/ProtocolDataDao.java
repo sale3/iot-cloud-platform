@@ -14,4 +14,5 @@ public interface ProtocolDataDao extends JpaRepository<ProtocolDataEntity, Long>
     @Query("SELECT p FROM ProtocolDataEntity p WHERE p.protocol.id = :protocolId")
     List<ProtocolDataEntity> findByProtocolId(@Param("protocolId") Long protocolId);
 
+
 }
