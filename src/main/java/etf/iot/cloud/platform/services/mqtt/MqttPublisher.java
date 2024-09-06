@@ -15,12 +15,6 @@ public class MqttPublisher {
     private long MAX_SESSION_EXPIRATION_INTERVAL = 4294967295L;
 
     /**
-     * Protocol topic name.
-     */
-    @Value("${mqtt.PROTOCOL_TOPIC}")
-    private String PROTOCOL_TOPIC;
-
-    /**
      * Quality of service level for publisher packets.
      */
     @Value("${mqtt.qos}")
@@ -63,24 +57,12 @@ public class MqttPublisher {
         mqttClient.connect(options.build());
     }
 
-    /*public MqttPublisher() throws MqttException {
-        MqttConnectionOptionsBuilder options = new MqttConnectionOptionsBuilder();
-        options.username(username);
-        options.password(password.getBytes());
-        options.serverURI(broker);
-        options.automaticReconnect(true);
-        options.keepAliveInterval(8*60*60);
-        options.cleanStart(false);
-        options.sessionExpiryInterval(MAX_SESSION_EXPIRATION_INTERVAL);
 
-        this.mqttClient = new MqttClient(broker, clientId, new MqttDefaultFilePersistence());
-        mqttClient.connect(options.build());
-    }*/
-
-    public void publish(String payload) throws MqttException {
+    public void publish(String topic, String payload) throws MqttException {
+        System.out.println("MQTT Publisher published message on topic: " + topic + " with payload: " + payload);
         MqttMessage message = new MqttMessage(payload.getBytes());
         message.setQos(qos);
-        mqttClient.publish(PROTOCOL_TOPIC, message);
+        mqttClient.publish(topic, message);
 
     }
 
