@@ -2,9 +2,8 @@ package etf.iot.cloud.platform.services.dto;
 
 import etf.iot.cloud.platform.services.enums.DataAggregationMethod;
 import etf.iot.cloud.platform.services.enums.DataMode;
-import lombok.AllArgsConstructor;
+import lombok.*;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
@@ -34,4 +33,6 @@ public class ProtocolData {
     private int offsetValue;
 
     private String unit;
+
+    private boolean assigned;
 }
