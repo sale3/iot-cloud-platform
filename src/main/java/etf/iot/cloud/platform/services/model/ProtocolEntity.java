@@ -24,6 +24,6 @@ public class ProtocolEntity {
     private List<ProtocolDataEntity> protocolData;
 
     @Column(nullable = false)
-    private boolean assigned;
+    private boolean assigned = false;
 
 }

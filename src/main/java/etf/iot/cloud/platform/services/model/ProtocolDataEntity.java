@@ -3,13 +3,13 @@ package etf.iot.cloud.platform.services.model;
 import etf.iot.cloud.platform.services.enums.DataAggregationMethod;
 import etf.iot.cloud.platform.services.enums.DataMode;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Getter
+@Setter
 @Entity
 public class ProtocolDataEntity {
 
@@ -47,10 +47,10 @@ public class ProtocolDataEntity {
     @Column(nullable = false)
     private int offsetValue;
 
-    private String unit;
+    @Column(nullable = false)
+    private boolean assigned = false;
 
-    /*@Column(name = "protocol_id")
-    private long protocolId;*/
+    private String unit;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name="protocol",referencedColumnName = "id", nullable = false)
