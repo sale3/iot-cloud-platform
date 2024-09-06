@@ -1,12 +1,8 @@
 package etf.iot.cloud.platform.services.controllers;
 
-import etf.iot.cloud.platform.services.dto.OperationResult;
-import etf.iot.cloud.platform.services.dto.Protocol;
-import etf.iot.cloud.platform.services.dto.ProtocolData;
-import etf.iot.cloud.platform.services.dto.ProtocolDataSubmission;
+import etf.iot.cloud.platform.services.dto.*;
 import etf.iot.cloud.platform.services.exceptions.EntityNotPresentException;
 import etf.iot.cloud.platform.services.services.ProtocolDataService;
-import etf.iot.cloud.platform.services.services.ProtocolService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +28,29 @@ public class ProtocolDataController {
     public ResponseEntity<OperationResult> submitProtocolDataChanges
             (@PathVariable("protocolId") long protocolId, @RequestBody ProtocolDataSubmission protocolDataSubmission) throws EntityNotPresentException {
         return new ResponseEntity<>(protocolDataService.submitProtocolDataChanges(protocolId, protocolDataSubmission), HttpStatus.OK);
+    }
+
+    @PostMapping("/send_data_to_device")
+    public ResponseEntity<Void> sendDataToDevice(@RequestBody ProtocolInputSetData protocolInputData) {
+        protocolDataService.sendDataToDevice(protocolInputData);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/stop_data_from_device")
+    public ResponseEntity<Void> stopDataFromDevice(@RequestBody ProtocolInputStopData protocolInputData) {
+        protocolDataService.stopDataFromDevice(protocolInputData);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/current_values_request")
+    public ResponseEntity<Void> sendMQTTRequestForCurrentDataValues() {
+        protocolDataService.protocolValueDataGatewayRequest();
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/current_values")
+    public ResponseEntity<List<ProtocolValueData>> getCurrentDataValues() {
+        return new ResponseEntity<>(protocolDataService.getProtocolValueData(), HttpStatus.OK);
     }
 
 }
