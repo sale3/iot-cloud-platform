@@ -1,9 +1,14 @@
 package etf.iot.cloud.platform.services.dto;
 
+import lombok.Getter;
+import lombok.Setter;
+
 /**
  * Class that represents sensor data.
  */
 @lombok.Data
+@Getter
+@Setter
 public class Data {
     /**
      * Sensor data value

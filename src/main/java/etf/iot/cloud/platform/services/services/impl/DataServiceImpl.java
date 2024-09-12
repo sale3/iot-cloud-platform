@@ -1,21 +1,17 @@
 package etf.iot.cloud.platform.services.services.impl;
 
 import com.google.gson.Gson;
-import etf.iot.cloud.platform.services.dao.DataDao;
-import etf.iot.cloud.platform.services.dao.DeviceDao;
-import etf.iot.cloud.platform.services.dao.StatsDao;
-import etf.iot.cloud.platform.services.dto.Data;
-import etf.iot.cloud.platform.services.dto.Device;
-import etf.iot.cloud.platform.services.dto.DeviceData;
-import etf.iot.cloud.platform.services.dto.Stats;
+import etf.iot.cloud.platform.services.dao.*;
+import etf.iot.cloud.platform.services.dto.*;
 import etf.iot.cloud.platform.services.enums.DataType;
 import etf.iot.cloud.platform.services.enums.DataUnit;
-import etf.iot.cloud.platform.services.model.DataEntity;
-import etf.iot.cloud.platform.services.model.DeviceEntity;
+import etf.iot.cloud.platform.services.model.*;
 import etf.iot.cloud.platform.services.services.DataService;
 import etf.iot.cloud.platform.services.services.DeviceService;
 import etf.iot.cloud.platform.services.util.LoggerBean;
+import jakarta.transaction.Transactional;
 import org.modelmapper.ModelMapper;
+import org.modelmapper.PropertyMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
@@ -44,6 +40,14 @@ public class DataServiceImpl implements DataService {
      * Dao object for stats data entities manipulation
      */
     private final StatsDao statsDao;
+    /**
+     * Dao object for protocol data entities manipulation
+     */
+    private final ProtocolDataDao protocolDataDao;
+    /**
+     * Dao object for protocol stats entities manipulation
+     */
+    private final ProtocolStatsDao protocolStatsDao;
     /**
      * Provides object mapping func
      */
@@ -88,9 +92,11 @@ public class DataServiceImpl implements DataService {
      * @param deviceDao device's account dao
      * @param simpMessageTemplate message forwarder
      */
-    public DataServiceImpl(DataDao dataDao, StatsDao statsDao, ModelMapper modelMapper, LoggerBean loggerBean, DeviceDao deviceDao, SimpMessagingTemplate simpMessageTemplate, DeviceService deviceService) {
+    public DataServiceImpl(DataDao dataDao, StatsDao statsDao, ProtocolDataDao protocolDataDao, ProtocolStatsDao protocolStatsDao, ModelMapper modelMapper, LoggerBean loggerBean, DeviceDao deviceDao, SimpMessagingTemplate simpMessageTemplate, DeviceService deviceService) {
         this.dataDao = dataDao;
         this.statsDao = statsDao;
+        this.protocolStatsDao = protocolStatsDao;
+        this.protocolDataDao = protocolDataDao;
         this.modelMapper = modelMapper;
         this.loggerBean = loggerBean;
         this.deviceDao = deviceDao;
@@ -171,6 +177,37 @@ public class DataServiceImpl implements DataService {
         entity.setDevice(deviceEntity);
         dataDao.saveAndFlush(entity);
         simpMessageTemplate.convertAndSendToUser(device.getUsername(), entity.getType().name().toLowerCase(), gson.toJson(data,Data.class));
+    }
+
+    @Override
+    @Transactional
+    public void receiveProtocolMqtt(String username, ProtocolStats data) {
+        String time = data.getTime();
+        data.setTime(null);
+        ProtocolStatsEntity entity = modelMapper.map(data, ProtocolStatsEntity.class);
+        ProtocolDataEntity protocolDataEntity = protocolDataDao.findById(data.getDataId()).get();
+        entity.setUnit(protocolDataEntity.getUnit());
+        data.setUnit(protocolDataEntity.getUnit());
+        Device device = deviceService.loadUserByUsername(username);
+        try {
+            DateFormat dateFormat = new SimpleDateFormat(device.getTimeFormat());
+            entity.setTime(dateFormat.parse(time));
+            data.setTime(dateFormater.format(dateFormat.parse(time)));
+        } catch (Exception e) {
+            e.printStackTrace();
+            loggerBean.logError(e);
+            entity.setTime(new Date());
+            data.setTime(dateFormater.format(new Date()));
+        }
+        DeviceEntity deviceEntity = deviceDao.findById(device.getId()).get();
+        entity.setDevice(deviceEntity);
+        protocolStatsDao.saveAndFlush(entity);
+        ProtocolStatsMqttMessage protocolStatsMqttMessage = new ProtocolStatsMqttMessage();
+        protocolStatsMqttMessage.setProtocolStats(data);
+        protocolStatsMqttMessage.setProtocolDataName(protocolDataEntity.getName());
+        ProtocolEntity protocol = protocolDataEntity.getProtocol();
+        protocolStatsMqttMessage.setProtocolName(protocol.getName());
+        simpMessageTemplate.convertAndSendToUser(device.getUsername(), "protocol", gson.toJson(protocolStatsMqttMessage,ProtocolStatsMqttMessage.class));
     }
 
     /**

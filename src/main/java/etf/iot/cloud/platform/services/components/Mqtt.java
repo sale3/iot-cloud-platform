@@ -1,26 +1,30 @@
 package etf.iot.cloud.platform.services.components;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import etf.iot.cloud.platform.services.dto.Data;
-import etf.iot.cloud.platform.services.dto.Stats;
+import etf.iot.cloud.platform.services.dto.ProtocolValueData;
 import etf.iot.cloud.platform.services.dto.mqtt.MqttData;
+import etf.iot.cloud.platform.services.dto.mqtt.MqttProtocolStats;
 import etf.iot.cloud.platform.services.dto.mqtt.MqttStats;
 import etf.iot.cloud.platform.services.enums.DataType;
+import etf.iot.cloud.platform.services.enums.DataUnit;
+import etf.iot.cloud.platform.services.model.ProtocolDataEntity;
 import etf.iot.cloud.platform.services.services.DataService;
+import etf.iot.cloud.platform.services.services.ProtocolDataService;
+import etf.iot.cloud.platform.services.services.ProtocolService;
 import etf.iot.cloud.platform.services.services.StatsService;
-import etf.iot.cloud.platform.services.util.LoggerBean;
 import org.eclipse.paho.mqttv5.client.*;
 import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
 import org.eclipse.paho.mqttv5.client.persist.MqttDefaultFilePersistence;
 import org.eclipse.paho.mqttv5.common.*;
 import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.stereotype.Component;
-
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Mqtt class represents mqtt client for subscribing to specified topics on mqtt broker.
@@ -50,6 +54,21 @@ public class Mqtt implements ApplicationListener<ContextRefreshedEvent> {
      */
     @Value("${mqtt.FUEL_TOPIC}")
     private String FUEL_TOPIC;
+    /**
+     * Startup protocol topic name.
+     */
+    @Value("${mqtt.PROTOCOL_STARTUP_TOPIC}")
+    private String PROTOCOL_STARTUP_TOPIC;
+    /**
+     * Protocol data topic name.
+     */
+    @Value("${mqtt.PROTOCOL_DATA_TOPIC}")
+    private String PROTOCOL_DATA_TOPIC;
+    /**
+     * Protocol value topic name.
+     */
+    @Value("${mqtt.PROTOCOL_VALUE_TOPIC}")
+    private String PROTOCOL_VALUE_TOPIC;
     /**
      * Stats topic name.
      */
@@ -90,7 +109,14 @@ public class Mqtt implements ApplicationListener<ContextRefreshedEvent> {
      * Contains logic for managing received aggregated data stats.
      */
     private StatsService statsService;
-
+    /**
+     * Contains logic for managing received protocol data.
+     */
+    private ProtocolService protocolService;
+    /**
+     * Contains logic for managing received data in protocols.
+     */
+    private ProtocolDataService protocolDataService;
     /**
      * Persistence for subscriber.
      */
@@ -106,29 +132,51 @@ public class Mqtt implements ApplicationListener<ContextRefreshedEvent> {
      */
     private final IMqttMessageListener[] listeners = {
             (topic, mqttMessage) -> {
-                System.out.println("CLOUD TEMP: " + new String(mqttMessage.getPayload()));
-                MqttData mqttData = objectMapper.readValue(new String(mqttMessage.getPayload()), MqttData.class);
-                mqttData.payload.setType(DataType.TEMPERATURE.name());
-                dataService.receiveMqtt(mqttData.username, mqttData.payload);
-            },
-            (topic, mqttMessage) -> {
-                System.out.println("CLOUD LOAD: " + new String(mqttMessage.getPayload()));
-                MqttData mqttData = objectMapper.readValue(new String(mqttMessage.getPayload()), MqttData.class);
-                mqttData.payload.setType(DataType.LOAD.name());
-                dataService.receiveMqtt(mqttData.username, mqttData.payload);
-            },
-            (topic, mqttMessage) -> {
-                System.out.println("CLOUD FUEL: " + new String(mqttMessage.getPayload()));
-                MqttData mqttData = objectMapper.readValue(new String(mqttMessage.getPayload()), MqttData.class);
-                mqttData.payload.setType(DataType.FUEL_LEVEL.name());
-                dataService.receiveMqtt(mqttData.username, mqttData.payload);
-            },
-            (topic, mqttMessage) -> {
                 System.out.println("CLOUD STATS: " + new String(mqttMessage.getPayload()));
                 MqttStats mqttStats = objectMapper.readValue(new String(mqttMessage.getPayload()), MqttStats.class);
                 statsService.receiveMqtt(mqttStats.username, mqttStats.payload);
+            },
+            (topic, mqttMessage) -> {
+                System.out.println("PROTOCOL STARTUP DATA: " + new String(mqttMessage.getPayload()));
+                protocolService.returnProtocolStartupData();
+            },
+            (topic, mqttMessage) -> {
+                System.out.println("PROTOCOL DATA: " + new String(mqttMessage.getPayload()));
+                MqttProtocolStats mqttProtocolStats = objectMapper.readValue(new String(mqttMessage.getPayload()), MqttProtocolStats.class);
+                ProtocolDataEntity protocolDataEntity = protocolDataService.findById(mqttProtocolStats.getPayload().getDataId());
+                dataService.receiveProtocolMqtt(mqttProtocolStats.getUsername(), mqttProtocolStats.getPayload());
+                if(protocolDataEntity.getName().toLowerCase().contains("engine") && protocolDataEntity.getName().toLowerCase().contains("temperature")) {
+                    MqttData mqttData = new MqttData();
+                    setParameters(mqttData, mqttProtocolStats, DataType.TEMPERATURE.name(), DataUnit.C.name());
+                    dataService.receiveMqtt(mqttData.username, mqttData.payload);
+                } else if(protocolDataEntity.getName().toLowerCase().contains("fuel") && protocolDataEntity.getName().toLowerCase().contains("level")) {
+                    MqttData mqttData = new MqttData();
+                    setParameters(mqttData, mqttProtocolStats, DataType.FUEL_LEVEL.name(), DataUnit.l.name());
+                    dataService.receiveMqtt(mqttData.username, mqttData.payload);
+                } else if(protocolDataEntity.getName().toLowerCase().contains("load")) {
+                    MqttData mqttData = new MqttData();
+                    setParameters(mqttData, mqttProtocolStats, DataType.LOAD.name(), DataUnit.kg.name());
+                    dataService.receiveMqtt(mqttData.username, mqttData.payload);
+                }
+            },
+            (topic, mqttMessage) -> {
+                System.out.println("PROTOCOL VALUE DATA: " + new String(mqttMessage.getPayload()));
+                List<ProtocolValueData> protocolValueData = objectMapper.readValue(mqttMessage.getPayload(), new TypeReference<List<ProtocolValueData>>(){});
+                for(ProtocolValueData protocolValueData1 : protocolValueData) {
+                    protocolValueData1.setId(null);
+                }
+                protocolDataService.writeDataToDatabase(protocolValueData);
             }
     };
+
+    private void setParameters(MqttData mqttData, MqttProtocolStats mqttProtocolStats, String type, String unit) {
+        mqttData.payload = new Data();
+        mqttData.username = mqttProtocolStats.getUsername();
+        mqttData.payload.setTime(mqttProtocolStats.getPayload().getTime());
+        mqttData.payload.setUnit(unit);
+        mqttData.payload.setValue(mqttProtocolStats.getPayload().getValue());
+        mqttData.payload.setType(type);
+    }
 
     /**
      * Class constructor.
@@ -136,9 +184,11 @@ public class Mqtt implements ApplicationListener<ContextRefreshedEvent> {
      * @param dataService Object implementing DataService interface.
      * @param statsService Object implementing StatsService interface.
      */
-    public Mqtt(DataService dataService, StatsService statsService) {
+    public Mqtt(DataService dataService, StatsService statsService, ProtocolService protocolService, ProtocolDataService protocolDataService) {
         this.dataService = dataService;
         this.statsService = statsService;
+        this.protocolService = protocolService;
+        this.protocolDataService = protocolDataService;
     }
 
     /**
@@ -177,10 +227,10 @@ public class Mqtt implements ApplicationListener<ContextRefreshedEvent> {
         System.out.println("Connected");
 
         MqttSubscription[] subscriptions = {
-            new MqttSubscription(TEMP_TOPIC, qos),
-            new MqttSubscription(LOAD_TOPIC, qos),
-            new MqttSubscription(FUEL_TOPIC, qos),
-            new MqttSubscription(STATS_TOPIC, qos)
+                new MqttSubscription(STATS_TOPIC, qos),
+                new MqttSubscription(PROTOCOL_STARTUP_TOPIC, qos),
+                new MqttSubscription(PROTOCOL_DATA_TOPIC, qos),
+                new MqttSubscription(PROTOCOL_VALUE_TOPIC, qos),
         };
 
         // Workaround for a bug that is still present (indexes zero length array at index 0)

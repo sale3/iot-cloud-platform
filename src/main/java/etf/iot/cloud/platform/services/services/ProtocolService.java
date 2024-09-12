@@ -17,4 +17,10 @@ public interface ProtocolService {
     Protocol createProtocol(Protocol protocol);
 
     OperationResult deleteProtocol(long id);
+
+    OperationResult protocolAssignment(List<Protocol> protocols);
+
+    void returnProtocolStartupData();
+
+    OperationResult syncProtocols();
 }

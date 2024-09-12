@@ -49,4 +49,7 @@ public class DeviceEntity {
      */
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "device")
     private List<StatsEntity> stats;
+
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "device")
+    private List<ProtocolStatsEntity> protocolStats;
 }

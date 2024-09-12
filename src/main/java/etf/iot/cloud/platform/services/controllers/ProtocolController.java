@@ -45,5 +45,14 @@ public class ProtocolController {
         return new ResponseEntity<>(protocolService.deleteProtocol(id), HttpStatus.OK);
     }
 
+    @PostMapping("/protocol_assignment")
+    public ResponseEntity<OperationResult> protocolAssignment(@RequestBody List<Protocol> protocols) {
+        return new ResponseEntity<>(protocolService.protocolAssignment(protocols), HttpStatus.OK);
+    }
+
+    @PostMapping("/sync")
+    public ResponseEntity<OperationResult> syncProtocols() {
+        return new ResponseEntity<>(protocolService.syncProtocols(), HttpStatus.OK);
+    }
 
 }
