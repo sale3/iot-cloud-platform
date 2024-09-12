@@ -142,10 +142,11 @@ public class ProtocolServiceImpl implements ProtocolService {
         //Send removed protocols
         if(removedProtocols.size() > 0) {
             try {
-                GatewayProtocolMessage gatewayProtocolAssignmentMessage = new GatewayProtocolMessage();
+                GatewayIdentifiersMessage gatewayProtocolAssignmentMessage = new GatewayIdentifiersMessage();
                 gatewayProtocolAssignmentMessage.setType("protocol_assignment");
                 gatewayProtocolAssignmentMessage.setAction("remove");
-                gatewayProtocolAssignmentMessage.setProtocols(removedProtocols);
+                List<Long> protocolIdentifiers = removedProtocols.stream().map(Protocol::getId).toList();
+                gatewayProtocolAssignmentMessage.setProtocols(protocolIdentifiers);
                 String jsonPayload = objectMapper.writeValueAsString(gatewayProtocolAssignmentMessage);
                 mqttPublisher.publish(PROTOCOL_TOPIC, jsonPayload);
             } catch (JsonProcessingException | MqttException e) {
@@ -178,11 +179,10 @@ public class ProtocolServiceImpl implements ProtocolService {
 
         if(assignedProtocols.size() > 0) {
             try {
-                GatewayProtocolMessage gatewayProtocolAssignmentMessage = new GatewayProtocolMessage();
-                gatewayProtocolAssignmentMessage.setType("startup_fetching");
-                gatewayProtocolAssignmentMessage.setAction("add");
-                gatewayProtocolAssignmentMessage.setProtocols(assignedProtocols);
-                String jsonPayload = objectMapper.writeValueAsString(gatewayProtocolAssignmentMessage);
+                StartupFetchingMessage startupFetchingMessage = new StartupFetchingMessage();
+                startupFetchingMessage.setType("startup_fetching");
+                startupFetchingMessage.setProtocols(assignedProtocols);
+                String jsonPayload = objectMapper.writeValueAsString(startupFetchingMessage);
                 mqttPublisher.publish(PROTOCOL_TOPIC, jsonPayload);
             } catch (JsonProcessingException | MqttException e) {
                 System.out.println("Exception = " + e.getMessage());
@@ -195,10 +195,13 @@ public class ProtocolServiceImpl implements ProtocolService {
     public OperationResult syncProtocols() {
         try {
             List<ProtocolEntity> assignedProtocols = protocolDao.findAll().stream().filter(ProtocolEntity::isAssigned).toList();
-            for(ProtocolEntity protocolEntity : assignedProtocols) {
-                protocolEntity.setAssigned(true);
+            for(ProtocolEntity assignedProtocol : assignedProtocols) {
+                List<ProtocolDataEntity> protocolDataEntities = assignedProtocol.getProtocolData();
+                for(ProtocolDataEntity protocolDataEntity : protocolDataEntities) {
+                    protocolDataEntity.setAssigned(true);
+                }
+                protocolDataDao.saveAll(protocolDataEntities);
             }
-            protocolDao.saveAll(assignedProtocols);
             SyncMessage syncMessage = new SyncMessage();
             syncMessage.setType("sync");
             String jsonPayload = objectMapper.writeValueAsString(syncMessage);

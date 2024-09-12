@@ -160,9 +160,6 @@ public class ProtocolDataServiceImpl implements ProtocolDataService {
     @Override
     public void sendDataToDevice(ProtocolInputSetData protocolInputData) {
         try {
-            System.out.println(protocolInputData.getDataId());
-            System.out.println("Type = " + protocolInputData.getType());
-            System.out.println("Action = " + protocolInputData.getAction());
             String jsonPayload = objectMapper.writeValueAsString(protocolInputData);
             mqttPublisher.publish(PROTOCOL_TOPIC, jsonPayload);
         } catch (JsonProcessingException | MqttException e) {
@@ -190,7 +187,6 @@ public class ProtocolDataServiceImpl implements ProtocolDataService {
             protocolValueInputData.setAction("get_current_values");
             String jsonPayload = objectMapper.writeValueAsString(protocolValueInputData);
             mqttPublisher.publish(PROTOCOL_TOPIC, jsonPayload);
-            System.out.println("Request sent!!!");
         } catch (JsonProcessingException | MqttException e) {
             System.out.println("Exception = " + e.getMessage());
         }
