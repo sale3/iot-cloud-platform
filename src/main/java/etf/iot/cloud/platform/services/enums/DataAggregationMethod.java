@@ -1,5 +1,5 @@
 package etf.iot.cloud.platform.services.enums;
 
 public enum DataAggregationMethod {
-    MIN, MAX, AVG, SUM
+    NONE, MIN, MAX, AVG, SUM
 }
